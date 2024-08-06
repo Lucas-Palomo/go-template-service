@@ -28,7 +28,7 @@ func (svc *Service) Register(name string, path string) error {
 		path,
 		&scriggo.BuildOptions{
 			Globals: native.Declarations{
-				"ctx": make(map[string]any),
+				"ctx": map[string]any{},
 			},
 		})
 

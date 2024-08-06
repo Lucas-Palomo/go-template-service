@@ -28,7 +28,7 @@ func (svc *Service) Register(name string, path string) error {
 		path,
 		&scriggo.BuildOptions{
 			Globals: native.Declarations{
-				"ctx": &map[string]any{},
+				"ctx": (*map[string]interface{})(nil),
 			},
 		})
 
@@ -45,7 +45,7 @@ func (svc *Service) Render(name string, context map[string]any, writer io.Writer
 	if !ok {
 		return fmt.Errorf("template %s not found", name)
 	}
-	return tmpl.Run(writer, map[string]interface{}{"ctx": &context}, nil)
+	return tmpl.Run(writer, map[string]interface{}{"ctx": context}, nil)
 }
 
 func (svc *Service) RenderAsString(name string, context map[string]any) (string, error) {

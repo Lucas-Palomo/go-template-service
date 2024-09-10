@@ -48,35 +48,17 @@ func (svc *Service) AddFunc(name string, fn native.Declaration) {
 	svc.mutex.Unlock()
 }
 
-//func (svc *Service) Load() error {
-//
-//	for name, path := range svc.templatesPath {
-//
-//		template, err := scriggo.BuildTemplate(
-//			svc.dir,
-//			path,
-//			&scriggo.BuildOptions{
-//				Globals: svc.templateData,
-//			})
-//
-//		if err != nil {
-//			return err
-//		}
-//
-//		svc.templates[name] = template
-//	}
-//	return nil
-//}
-
 func (svc *Service) Render(name string, context native.Declarations, writer io.Writer) error {
 	path, ok := svc.templates[name]
 	if !ok {
 		return fmt.Errorf("template %s not found", name)
 	}
 
+	svc.mutex.Lock()
 	for key, value := range svc.viewData {
 		context[key] = value
 	}
+	svc.mutex.Unlock()
 
 	template, err := scriggo.BuildTemplate(
 		svc.dir,

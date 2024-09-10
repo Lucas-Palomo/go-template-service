@@ -8,47 +8,96 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"sync"
 )
 
 type Service struct {
-	templates map[string]*scriggo.Template
+	templates map[string]string
+	viewData  native.Declarations
 	dir       fs.FS
+	mutex     sync.RWMutex
 }
 
 func New(dir string) *Service {
 	return &Service{
-		templates: make(map[string]*scriggo.Template),
-		dir:       os.DirFS(dir),
+		dir: os.DirFS(dir),
+		viewData: native.Declarations{
+			"ctx": (*native.Declarations)(nil),
+		},
+		templates: make(map[string]string),
 	}
 }
 
-func (svc *Service) Register(name string, path string) error {
-	tmpl, err := scriggo.BuildTemplate(
+func (svc *Service) AddTemplate(name string, path string) error {
+	if _, ok := svc.templates[name]; ok {
+		return fmt.Errorf("template already registered: %s", name)
+	}
+
+	_, err := svc.dir.Open(path)
+	if err != nil {
+		return err
+	}
+
+	svc.templates[name] = path
+	return nil
+}
+
+func (svc *Service) AddFunc(name string, fn native.Declaration) {
+	svc.mutex.Lock()
+	svc.viewData[name] = fn
+	svc.mutex.Unlock()
+}
+
+//func (svc *Service) Load() error {
+//
+//	for name, path := range svc.templatesPath {
+//
+//		template, err := scriggo.BuildTemplate(
+//			svc.dir,
+//			path,
+//			&scriggo.BuildOptions{
+//				Globals: svc.templateData,
+//			})
+//
+//		if err != nil {
+//			return err
+//		}
+//
+//		svc.templates[name] = template
+//	}
+//	return nil
+//}
+
+func (svc *Service) Render(name string, context native.Declarations, writer io.Writer) error {
+	path, ok := svc.templates[name]
+	if !ok {
+		return fmt.Errorf("template %s not found", name)
+	}
+
+	for key, value := range svc.viewData {
+		context[key] = value
+	}
+
+	template, err := scriggo.BuildTemplate(
 		svc.dir,
 		path,
 		&scriggo.BuildOptions{
-			Globals: native.Declarations{
-				"ctx": (*map[string]interface{})(nil),
-			},
-		})
+			Globals: context,
+		},
+	)
 
 	if err != nil {
 		return err
 	}
 
-	svc.templates[name] = tmpl
-	return nil
+	return template.Run(
+		writer,
+		nil,
+		nil,
+	)
 }
 
-func (svc *Service) Render(name string, context map[string]any, writer io.Writer) error {
-	tmpl, ok := svc.templates[name]
-	if !ok {
-		return fmt.Errorf("template %s not found", name)
-	}
-	return tmpl.Run(writer, map[string]interface{}{"ctx": context}, nil)
-}
-
-func (svc *Service) RenderAsString(name string, context map[string]any) (string, error) {
+func (svc *Service) RenderAsString(name string, context native.Declarations) (string, error) {
 	var buf bytes.Buffer
 
 	err := svc.Render(name, context, &buf)
